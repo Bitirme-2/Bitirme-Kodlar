@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Akademik Arama Motoru</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 30px;
+      font-weight: 600;
+    }
+
+    label {
+      font-size: 24px;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+
+    .search-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 40px;
+    }
+
+    input[type="text"] {
+      padding: 12px 18px;
+      font-size: 16px;
+      width: 280px;
+      border: 2px solid #000;
+      border-radius: 30px;
+      background: #fff;
+      color: #000;
+      outline: none;
+    }
+
+    .submit-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background-color: #000;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+    }
+
+    .submit-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .submit-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: #fff;
+    }
+
+    .results-grid {
+      display: flex;
+      gap: 30px;
+      justify-content: center;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .result-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      flex: 1;
+      max-width: 360px;
+    }
+
+    .column-title {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .result-card {
+      padding: 20px;
+      background-color: #000;
+      color: #fff;
+      border-radius: 12px;
+      font-size: 14px;
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .result-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .nav-buttons {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 20px;
+}
+
+.nav-btn {
+  padding: 10px 20px;
+  background-color: #333;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+
+    .card-detail {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
+    .similarity-badge {
+      align-self: flex-end;
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .no-results {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+      padding: 20px;
+    }
+
+    .loading {
+      display: none;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-left-color: #000;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .result-count {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 16px;
+      color: #666;
+    }
+
+    /* Responsive düzenlemeler */
+    @media (max-width: 900px) {
+      .results-grid {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .result-column {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-buttons" style="justify-content: flex-end; width: 100%; max-width: 1200px;">
+<a href="{{ url_for('upload_form') }}" class="nav-btn" style="margin-left: auto;">Makale Yükle</a>
+  </div>
+  <h1>Akademik Arama Motoru</h1>
+
+  <label for="keyword">Keyword girin</label>
+
+  <div class="search-container">
+    <input type="text" id="keyword" placeholder="Anahtar kelime...">
+    <button class="submit-btn" id="searchButton">
+      <svg viewBox="0 0 24 24">
+        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Arama yapılıyor...</p>
+  </div>
+
+  <div class="result-count" id="resultCount"></div>
+
+  <div class="results-grid">
+    <div class="result-column">
+      <div class="column-title">Projeler</div>
+      <div id="projectsContainer"></div>
+    </div>
+    
+    <div class="result-column">
+      <div class="column-title">Çağrılar</div>
+      <div id="callsContainer"></div>
+    </div>
+    
+    <div class="result-column">
+      <div class="column-title">Akademisyenler</div>
+      <div id="academicsContainer"></div>
+    </div>
+  </div>
+
+  <script>
+
+
+async function searchKeyword(keyword) {
+    const response = await fetch('/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query: keyword })
+    });
+    if (!response.ok) {
+      throw new Error('Sunucudan veri alınamadı: ' + response.statusText);
+    }
+    return await response.json();
+  }
+
+    // Sonuç kartı oluşturma fonksiyonları
+    function createProjectCard(project) {
+      return `
+        <div class="result-card">
+          <div class="card-title">${project.title}</div>
+          <div class="card-detail"><strong>Yıl:</strong> ${project.year}</div>
+          <div class="card-detail"><strong>Anahtar Kelimeler:</strong> ${project.keywords}</div>
+          <div class="similarity-badge">Benzerlik: ${Math.round(project.similarity * 100)}%</div>
+        </div>
+      `;
+    }
+
+    function createCallCard(call) {
+      return `
+        <div class="result-card">
+          <div class="card-title">${call.title}</div>
+          <div class="card-detail">${call.description}</div>
+          <div class="similarity-badge">Benzerlik: ${Math.round(call.similarity * 100)}%</div>
+        </div>
+      `;
+    }
+
+    function createAcademicCard(academic) {
+      return `
+        <div class="result-card">
+          <div class="card-title">${academic.name}</div>
+          <div class="card-detail">${academic.keywords}</div>
+          <div class="similarity-badge">Benzerlik: ${Math.round(academic.similarity * 100)}%</div>
+        </div>
+      `;
+    }
+
+    // Sonuçları temizleme fonksiyonu
+    function clearResults() {
+      document.getElementById('projectsContainer').innerHTML = '';
+      document.getElementById('callsContainer').innerHTML = '';
+      document.getElementById('academicsContainer').innerHTML = '';
+      document.getElementById('resultCount').textContent = '';
+    }
+
+    // Sonuçları görüntüleme fonksiyonu
+    function displayResults(results) {
+      clearResults();
+      
+      const projectsContainer = document.getElementById('projectsContainer');
+      const callsContainer = document.getElementById('callsContainer');
+      const academicsContainer = document.getElementById('academicsContainer');
+      
+      // Projeleri ekle
+      if (results.projects && results.projects.length > 0) {
+        results.projects.forEach(project => {
+          projectsContainer.innerHTML += createProjectCard(project);
+        });
+      } else {
+        projectsContainer.innerHTML = '<div class="no-results">Eşleşen proje bulunamadı</div>';
+      }
+      
+      // Çağrıları ekle
+      if (results.calls && results.calls.length > 0) {
+        results.calls.forEach(call => {
+          callsContainer.innerHTML += createCallCard(call);
+        });
+      } else {
+        callsContainer.innerHTML = '<div class="no-results">Eşleşen çağrı bulunamadı</div>';
+      }
+      
+      // Akademisyenleri ekle
+      if (results.academics && results.academics.length > 0) {
+        results.academics.forEach(academic => {
+          academicsContainer.innerHTML += createAcademicCard(academic);
+        });
+      } else {
+        academicsContainer.innerHTML = '<div class="no-results">Eşleşen akademisyen bulunamadı</div>';
+      }
+      
+      // Toplam sonuç sayısını göster
+      const totalCount = 
+        (results.projects ? results.projects.length : 0) + 
+        (results.calls ? results.calls.length : 0) + 
+        (results.academics ? results.academics.length : 0);
+      
+      document.getElementById('resultCount').textContent = `Toplam ${totalCount} sonuç bulundu`;
+    }
+
+    // Arama işlemini başlatan fonksiyon
+    async function performSearch() {
+      const keyword = document.getElementById('keyword').value.trim();
+      
+      if (!keyword) {
+        alert('Lütfen bir anahtar kelime girin');
+        return;
+      }
+      
+      // Yükleniyor durumunu göster
+      document.getElementById('loading').style.display = 'block';
+      clearResults();
+      
+      try {
+        const results = await searchKeyword(keyword);
+        // Yükleniyor durumunu gizle
+        document.getElementById('loading').style.display = 'none';
+        displayResults(results);
+      } catch (error) {
+        console.error('Arama sırasında hata oluştu:', error);
+        document.getElementById('loading').style.display = 'none';
+        alert('Arama yapılırken bir hata oluştu');
+      }
+    }
+
+    // Event listeners
+    document.getElementById('searchButton').addEventListener('click', performSearch);
+    document.getElementById('keyword').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        performSearch();
+      }
+    });
+  </script>
+</body>
+</html>
