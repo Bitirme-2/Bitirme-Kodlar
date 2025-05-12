@@ -156,9 +156,11 @@
   </style>
 </head>
 <body>
-  <div class="nav-buttons">
-    <a href="{{ url_for('index') }}" class="nav-btn">Ana Sayfa</a>
-  </div>
+  <!-- upload.html sayfasına ekleyeceğiniz navigasyon butonları -->
+<div class="nav-buttons">
+  <a href="{{ url_for('index') }}" class="nav-btn">Ana Sayfa</a>
+  <a href="{{ url_for('add_call_form') }}" class="nav-btn">Çağrı Ekle</a>
+</div>
 
   <h1>Makale Yükleme Formu</h1>
 

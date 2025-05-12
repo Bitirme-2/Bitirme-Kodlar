@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Sistem Sağlık Durumu</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 30px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .status-card {
+      background-color: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      padding: 25px;
+      margin-bottom: 30px;
+    }
+
+    .status-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .status-title {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+    }
+
+    .status-indicator.online {
+      color: #10b981;
+    }
+
+    .status-indicator.offline {
+      color: #ef4444;
+    }
+
+    .status-indicator.loading {
+      color: #f59e0b;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .status-dot.online {
+      background-color: #10b981;
+    }
+
+    .status-dot.offline {
+      background-color: #ef4444;
+    }
+
+    .status-dot.loading {
+      background-color: #f59e0b;
+    }
+
+    .status-details {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .status-item {
+      background-color: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .item-label {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 5px;
+    }
+
+    .item-value {
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .refresh-button {
+      background-color: #000;
+      color: #fff;
+      border: none;
+      border-radius: 30px;
+      padding: 12px 25px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      display: block;
+      margin: 0 auto;
+      transition: transform 0.2s ease;
+    }
+
+    .refresh-button:hover {
+      transform: translateY(-2px);
+    }
+
+    .refresh-time {
+      text-align: center;
+      margin-top: 15px;
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    .nav-btn {
+      padding: 10px 20px;
+      background-color: #333;
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-left-color: #fff;
+      animation: spin 1s linear infinite;
+      display: none;
+      margin-left: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .status-details {
+        flex-direction: column;
+      }
+      
+      .status-item {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="nav-buttons">
+      <a href="/" class="nav-btn">Ana Sayfa</a>
+      <div>
+        <a href="/add_call" class="nav-btn" style="margin-right: 10px;">Çağrı Ekle</a>
+        <a href="/upload" class="nav-btn">Makale Yükle</a>
+      </div>
+    </div>
+
+    <h1>Sistem Sağlık Durumu</h1>
+
+    <div class="status-card">
+      <div class="status-header">
+        <div class="status-title">Sistem Durumu</div>
+        <div id="overallStatus" class="status-indicator">
+          <div class="status-dot"></div>
+          <span>Kontrol ediliyor...</span>
+        </div>
+      </div>
+
+      <div class="status-details">
+        <div class="status-item">
+          <div class="item-label">NLP Model Durumu</div>
+          <div id="modelStatus" class="item-value">-</div>
+        </div>
+        <div class="status-item">
+          <div class="item-label">Veritabanı Bağlantısı</div>
+          <div id="dbStatus" class="item-value">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-card">
+      <div class="status-header">
+        <div class="status-title">Veri İstatistikleri</div>
+      </div>
+
+      <div class="status-details">
+        <div class="status-item">
+          <div class="item-label">Projeler</div>
+          <div id="projectsCount" class="item-value">-</div>
+        </div>
+        <div class="status-item">
+          <div class="item-label">Akademisyenler</div>
+          <div id="academicsCount" class="item-value">-</div>
+        </div>
+        <div class="status-item">
+          <div class="item-label">Çağrılar</div>
+          <div id="callsCount" class="item-value">-</div>
+        </div>
+      </div>
+    </div>
+
+    <button id="refreshButton" class="refresh-button">
+      Durumu Yenile
+      <span id="refreshSpinner" class="spinner"></span>
+    </button>
+
+    <div id="refreshTime" class="refresh-time">
+      Son güncelleme: -
+    </div>
+  </div>
+
+  <script>
+    // DOM elementlerini seç
+    const overallStatus = document.getElementById('overallStatus');
+    const modelStatus = document.getElementById('modelStatus');
+    const dbStatus = document.getElementById('dbStatus');
+    const projectsCount = document.getElementById('projectsCount');
+    const academicsCount = document.getElementById('academicsCount');
+    const callsCount = document.getElementById('callsCount');
+    const refreshButton = document.getElementById('refreshButton');
+    const refreshSpinner = document.getElementById('refreshSpinner');
+    const refreshTime = document.getElementById('refreshTime');
+
+    // Durumu görselleştirme yardımcı fonksiyonları
+    function updateStatusIndicator(element, status, text) {
+      const dot = element.querySelector('.status-dot');
+      const span = element.querySelector('span');
+      
+      dot.className = 'status-dot ' + status;
+      element.className = 'status-indicator ' + status;
+      span.textContent = text;
+    }
+
+    function formatDateTime(date) {
+      const options = { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+      };
+      return date.toLocaleString('tr-TR', options);
+    }
+
+    // Sağlık durumunu kontrol et ve UI'ı güncelle
+    async function checkHealth() {
+      try {
+        refreshSpinner.style.display = 'inline-block';
+        
+        const response = await fetch('/health');
+        const data = await response.json();
+        
+        // Model durumunu güncelle
+        if (data.model_status === 'loaded') {
+          modelStatus.textContent = 'Yüklendi';
+          modelStatus.style.color = '#10b981';
+        } else if (data.model_status === 'loading') {
+          modelStatus.textContent = 'Yükleniyor';
+          modelStatus.style.color = '#f59e0b';
+        } else {
+          modelStatus.textContent = 'Hata';
+          modelStatus.style.color = '#ef4444';
+        }
+        
+        // Veritabanı durumunu güncelle
+        if (data.database_connection) {
+          dbStatus.textContent = 'Bağlı';
+          dbStatus.style.color = '#10b981';
+        } else {
+          dbStatus.textContent = 'Bağlantı Yok';
+          dbStatus.style.color = '#ef4444';
+        }
+        
+        // Veri istatistiklerini güncelle
+        projectsCount.textContent = data.projects_count;
+        academicsCount.textContent = data.academics_count;
+        callsCount.textContent = data.calls_count;
+        
+        // Genel durumu güncelle
+        if (data.status === 'ok' && data.model_status === 'loaded' && data.database_connection) {
+          updateStatusIndicator(overallStatus, 'online', 'Çalışıyor');
+        } else if (data.status === 'ok' && data.model_status === 'loading') {
+          updateStatusIndicator(overallStatus, 'loading', 'Başlatılıyor');
+        } else {
+          updateStatusIndicator(overallStatus, 'offline', 'Sorun Var');
+        }
+        
+        // Son güncelleme zamanını güncelle
+        refreshTime.textContent = 'Son güncelleme: ' + formatDateTime(new Date());
+        
+      } catch (error) {
+        console.error('Health check error:', error);
+        updateStatusIndicator(overallStatus, 'offline', 'Bağlantı Hatası');
+        
+        modelStatus.textContent = 'Bilinmiyor';
+        modelStatus.style.color = '#ef4444';
+        
+        dbStatus.textContent = 'Bilinmiyor';
+        dbStatus.style.color = '#ef4444';
+      } finally {
+        refreshSpinner.style.display = 'none';
+      }
+    }
+
+    // Event listeners
+    refreshButton.addEventListener('click', checkHealth);
+    
+    // Sayfa yüklendiğinde ilk kontrolü yap
+    document.addEventListener('DOMContentLoaded', checkHealth);
+    
+    // Otomatik yenileme (opsiyonel - 30 saniyede bir)
+    // setInterval(checkHealth, 30000);
+  </script>
+</body>
+</html>

@@ -65,48 +65,8 @@ def setup_database():
         
         # Only create calls if they don't already exist
         existing_calls = list(graph.run("MATCH (c:Call) RETURN c").data())
-        if not existing_calls:
-            call1 = Node(
-                "Call", 
-                id=100, 
-                title="H2025 Research Grant on AI", 
-                description="Research call focusing on Natural Language Processing, machine learning, and sustainability applications. We're looking for innovative approaches to solve environmental challenges using AI."
-            )
-            calls.append(call1)
-            
-            call2 = Node(
-                "Call", 
-                id=101, 
-                title="EU Graph Data Initiative", 
-                description="Call for projects on graph mining, knowledge graphs, and network analysis with applications in social network analysis and infrastructure optimization."
-            )
-            calls.append(call2)
-            
-            graph.create(call1 | call2)
-            
-            # Add keywords for calls
-            for call in calls:
-                description = call["description"].lower()
-                # Define potential keywords in call
-                potential_keywords = ["ai", "nlp", "machine learning", "sustainability", 
-                                    "graph mining", "knowledge graphs", "network analysis"]
-                                    
-                for keyword in potential_keywords:
-                    if keyword in description:
-                        # Find or create keyword node
-                        keyword_node = Node("Keyword", name=keyword)
-                        try:
-                            graph.merge(keyword_node, "Keyword", "name")
-                            # Call-Keyword relationship
-                            has_theme_rel = Relationship(call, "HAS_THEME", keyword_node)
-                            graph.create(has_theme_rel)
-                        except Exception as e:
-                            logger.warning(f"Call-Keyword relationship error: {e}")
-                            continue
-        else:
-            for item in existing_calls:
-                calls.append(item['c'])
-        
+        for item in existing_calls:
+            calls.append(item['c'])
         logger.info(f"Database initialized with {len(projects)} projects, {len(academics)} academics, and {len(calls)} calls")
         
         return graph, academics, projects, calls
@@ -684,6 +644,10 @@ def submit_article():
         logger.error(f"Error while submitting article: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/system_health')
+def system_health():
+    return render_template('health.html')
+
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -694,10 +658,20 @@ def health():
         
         model_status = "loaded" if search_engine.model_loaded else "loading"
         
+        # Veritabanı bağlantısını aktif olarak test et
+        db_connected = False
+        try:
+            # Neo4j bağlantısını test etmek için basit bir sorgu çalıştır
+            result = search_engine.graph.run("MATCH (n) RETURN count(n) as count LIMIT 1").data()
+            db_connected = len(result) > 0
+        except Exception as e:
+            logger.error(f"Veritabanı bağlantı testi hatası: {e}")
+            db_connected = False
+        
         return jsonify({
             'status': 'ok',
             'model_status': model_status,
-            'database_connection': bool(search_engine.graph),
+            'database_connection': db_connected,
             'projects_count': len(search_engine.projects),
             'academics_count': len(search_engine.academics),
             'calls_count': len(search_engine.calls)
@@ -706,6 +680,94 @@ def health():
     except Exception as e:
         logger.error(f"Sağlık kontrolü sırasında hata: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Çağrı sayfası için route
+@app.route('/add_call', methods=['GET'])
+def add_call_form():
+    return render_template('add_call.html')
+
+
+# Çağrı formunu işleme endpointi
+@app.route('/submit_call', methods=['POST'])
+def submit_call():
+    try:
+        # Form verilerini al
+        title = request.form.get('title', '')
+        description = request.form.get('description', '')
+        deadline = request.form.get('deadline', '')
+        related_academics = request.form.get('related_academics', '')
+        
+        # Çağrı ID'si oluştur
+        import time
+        call_id = int(time.time())
+        
+        # Çağrı node'unu Neo4j'de oluştur
+        call = Node(
+            "Call",
+            id=call_id,
+            title=title.strip(),
+            description=description.strip(),
+            deadline=deadline.strip()
+        )
+        
+        # Graph bağlantısını al
+        graph = search_engine.graph
+        graph.create(call)
+        
+        # İlgili akademisyenleri işle
+        academic_names = [name.strip() for name in related_academics.split(',') if name.strip()]
+        
+        for name in academic_names:
+            # Akademisyen var mı diye kontrol et
+            academic_node = search_engine.matcher.match("Academic", name=name).first()
+            
+            if not academic_node:
+                # Akademisyen yoksa oluştur
+                academic_node = Node(
+                    "Academic",
+                    name=name,
+                    keywords="Researcher"
+                )
+                graph.create(academic_node)
+                search_engine.academics[name] = academic_node
+            
+            # Akademisyen ve çağrı arasında ilişki oluştur
+            related_to_rel = Relationship(academic_node, "RELATED_TO", call)
+            graph.create(related_to_rel)
+        
+        # Çağrıdan keywords çıkar ve bunları ekle
+        description_words = description.lower().split()
+        potential_keywords = ["ai", "nlp", "machine learning", "sustainability", 
+                        "graph mining", "knowledge graphs", "network analysis",
+                        "research", "grant", "funding", "scholarship"]
+                        
+        for keyword in potential_keywords:
+            if keyword in description.lower():
+                # Keyword node'unu bul veya oluştur
+                keyword_node = Node("Keyword", name=keyword)
+                try:
+                    graph.merge(keyword_node, "Keyword", "name")
+                    # Çağrı-Anahtar Kelime ilişkisi
+                    has_theme_rel = Relationship(call, "HAS_THEME", keyword_node)
+                    graph.create(has_theme_rel)
+                except Exception as e:
+                    logger.warning(f"Call-Keyword relationship error: {e}")
+                    continue
+        
+        # Yeni çağrıyı search engine'in call listesine ekle
+        search_engine.calls.append(call)
+        
+        # Model yüklüyse embeddinglari güncelle
+        if search_engine.model_loaded:
+            search_engine.precompute_embeddings()
+        
+        return jsonify({"success": True, "message": "Call added successfully", "call_id": call_id})
+        
+    except Exception as e:
+        logger.error(f"Error while submitting call: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 
 
 if __name__ == '__main__':

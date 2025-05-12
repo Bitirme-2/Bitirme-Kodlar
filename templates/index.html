@@ -202,12 +202,14 @@
   </style>
 </head>
 <body>
-  <div class="nav-buttons" style="justify-content: flex-end; width: 100%; max-width: 1200px;">
-<a href="{{ url_for('upload_form') }}" class="nav-btn" style="margin-left: auto;">Makale Yükle</a>
-  </div>
+  <!-- Ana sayfadaki index.html içine bu değişikliği ekleyin -->
+<div class="nav-buttons" style="justify-content: flex-end; width: 100%; max-width: 1200px;">
+  <a href="{{ url_for('add_call_form') }}" class="nav-btn" >Çağrı Ekle</a>
+  <a href="{{ url_for('upload_form') }}" class="nav-btn">Makale Yükle</a>
+<a href="{{ url_for('system_health') }}" class="nav-btn">Sistem Sağlığı</a>
+</div>
   <h1>Akademik Arama Motoru</h1>
 
-  <label for="keyword">Keyword girin</label>
 
   <div class="search-container">
     <input type="text" id="keyword" placeholder="Anahtar kelime...">
