@@ -48,6 +48,7 @@
 
     input[type="text"],
     input[type="number"],
+    input[type="url"],
     textarea {
       width: 100%;
       padding: 12px;
@@ -62,6 +63,7 @@
 
     input[type="text"]:focus,
     input[type="number"]:focus,
+    input[type="url"]:focus,
     textarea:focus {
       border-color: #000;
     }
@@ -153,55 +155,123 @@
       text-decoration: none;
       text-align: center;
     }
+
+    .upload-type-selector {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 25px;
+    }
+
+    .upload-type-btn {
+      flex: 1;
+      padding: 12px;
+      text-align: center;
+      background-color: #eee;
+      border: none;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .upload-type-btn:first-child {
+      border-radius: 6px 0 0 6px;
+    }
+
+    .upload-type-btn:last-child {
+      border-radius: 0 6px 6px 0;
+    }
+
+    .upload-type-btn.active {
+      background-color: #000;
+      color: #fff;
+    }
+
+    .form-section {
+      display: none;
+    }
+
+    .form-section.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <!-- upload.html sayfasına ekleyeceğiniz navigasyon butonları -->
-<div class="nav-buttons">
-  <a href="{{ url_for('index') }}" class="nav-btn">Ana Sayfa</a>
-  <a href="{{ url_for('add_call_form') }}" class="nav-btn">Çağrı Ekle</a>
-</div>
+  <div class="nav-buttons">
+    <a href="{{ url_for('index') }}" class="nav-btn">Ana Sayfa</a>
+    <a href="{{ url_for('add_call_form') }}" class="nav-btn">Çağrı Ekle</a>
+  </div>
 
   <h1>Makale Yükleme Formu</h1>
 
   <div class="container">
-    <form id="articleForm" enctype="multipart/form-data">
-      <div class="form-group">
-        <label for="title">Makale Başlığı:</label>
-        <input type="text" id="title" name="title" required>
-      </div>
+    <!-- Yükleme tipini seçme butonları -->
+    <div class="upload-type-selector">
+      <button type="button" class="upload-type-btn active" data-target="manual-form">Manuel Giriş</button>
+      <button type="button" class="upload-type-btn" data-target="link-form">URL ile Ekleme</button>
+    </div>
 
-      <div class="form-group">
-        <label for="keywords">Anahtar Kelimeler (virgülle ayırın):</label>
-        <input type="text" id="keywords" name="keywords" required>
-      </div>
-
-      <div class="form-group">
-        <label for="year">Yayın Yılı:</label>
-        <input type="number" id="year" name="year" min="1900" max="2099" required>
-      </div>
-
-      <div class="form-group">
-        <label for="academic">Yazarlar (virgülle ayırın):</label>
-        <input type="text" id="academic" name="academic" required>
-      </div>
-
-      <div class="form-group">
-        <label for="journal">Abstract</label>
-        <input type="text" id="abstract" name="abstract" required>
+    <!-- Manuel Giriş Formu -->
+    <div id="manual-form" class="form-section active">
+      <form id="manualArticleForm" enctype="multipart/form-data">
+        <input type="hidden" name="upload_type" value="manual">
+        
+        <div class="form-group">
+          <label for="title">Makale Başlığı:</label>
+          <input type="text" id="title" name="title" required>
         </div>
 
-      <div class="form-group">
-        <label for="pdf_file">PDF Dosyası:</label>
-        <input type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
-      </div>
+        <div class="form-group">
+          <label for="keywords">Anahtar Kelimeler (virgülle ayırın):</label>
+          <input type="text" id="keywords" name="keywords" required>
+        </div>
 
-      <button type="submit" class="submit-btn">Makaleyi Yükle</button>
-    </form>
+        <div class="form-group">
+          <label for="year">Yayın Yılı:</label>
+          <input type="number" id="year" name="year" min="1900" max="2099" required>
+        </div>
+
+        <div class="form-group">
+          <label for="academic">Yazarlar (virgülle ayırın):</label>
+          <input type="text" id="academic" name="academic" required>
+        </div>
+
+        <div class="form-group">
+          <label for="abstract">Abstract:</label>
+          <textarea id="abstract" name="abstract" rows="4" required></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="pdf_file">PDF Dosyası:</label>
+          <input type="file" id="pdf_file" name="pdf_file" accept=".pdf" required>
+        </div>
+
+        <button type="submit" class="submit-btn">Makaleyi Yükle</button>
+      </form>
+    </div>
+
+    <!-- URL Formu -->
+    <div id="link-form" class="form-section">
+      <form id="linkArticleForm" enctype="multipart/form-data">
+        <input type="hidden" name="upload_type" value="url">
+        
+        <div class="form-group">
+          <label for="article_url">Makale URL'si (IEEE veya benzeri):</label>
+          <input type="url" id="article_url" name="article_url" placeholder="https://ieeexplore.ieee.org/abstract/document/..." required>
+        </div>
+
+        <div class="form-group">
+          <label for="pdf_file_url">PDF Dosyası (opsiyonel):</label>
+          <input type="file" id="pdf_file_url" name="pdf_file" accept=".pdf">
+          <small>PDF dosyası sağlanmadığında sadece URL'den bilgiler çekilecektir.</small>
+        </div>
+
+        <button type="submit" class="submit-btn">Makaleyi Analiz Et ve Yükle</button>
+      </form>
+    </div>
 
     <div class="loading" id="loading">
       <div class="spinner"></div>
-      <p>Makale yükleniyor...</p>
+      <p>Makale işleniyor...</p>
     </div>
 
     <div class="message success" id="successMessage"></div>
@@ -209,16 +279,58 @@
   </div>
 
   <script>
-    document.getElementById('articleForm').addEventListener('submit', async function(e) {
+    // Yükleme tipi seçici buton işlevselliği
+    document.querySelectorAll('.upload-type-btn').forEach(button => {
+      button.addEventListener('click', () => {
+        // Tüm butonlardan active sınıfını kaldır
+        document.querySelectorAll('.upload-type-btn').forEach(btn => {
+          btn.classList.remove('active');
+        });
+        
+        // Tıklanan butona active sınıfını ekle
+        button.classList.add('active');
+        
+        // Tüm form bölümlerini gizle
+        document.querySelectorAll('.form-section').forEach(section => {
+          section.classList.remove('active');
+        });
+        
+        // İlgili form bölümünü göster
+        const targetId = button.dataset.target;
+        document.getElementById(targetId).classList.add('active');
+      });
+    });
+
+    // Manuel Form Gönderimi
+    document.getElementById('manualArticleForm').addEventListener('submit', async function(e) {
       e.preventDefault();
       
       // Formu doğrula
-      const form = document.getElementById('articleForm');
+      const form = document.getElementById('manualArticleForm');
       if (!form.checkValidity()) {
         form.reportValidity();
         return;
       }
       
+      await submitForm(form);
+    });
+
+    // URL Form Gönderimi
+    document.getElementById('linkArticleForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      // Formu doğrula
+      const form = document.getElementById('linkArticleForm');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      
+      await submitForm(form);
+    });
+
+    // Form gönderme fonksiyonu
+    async function submitForm(form) {
       // Yükleniyor durumunu göster
       document.getElementById('loading').style.display = 'block';
       document.getElementById('successMessage').style.display = 'none';
@@ -227,7 +339,10 @@
       try {
         const formData = new FormData(form);
         
-        const response = await fetch('/submit_article', {
+        // Upload type değerine göre endpoint seçimi
+        const endpoint = formData.get('upload_type') === 'url' ? '/submit_article_url' : '/submit_article';
+        
+        const response = await fetch(endpoint, {
           method: 'POST',
           body: formData
         });
@@ -262,7 +377,7 @@
         errorMsg.textContent = 'Sunucu ile iletişim sırasında bir hata oluştu.';
         errorMsg.style.display = 'block';
       }
-    });
+    }
   </script>
 </body>
 </html>

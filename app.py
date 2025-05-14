@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, url_for, send_from_directory
 from py2neo import Graph, Node, Relationship, NodeMatcher
 import pandas as pd
 from sentence_transformers import SentenceTransformer
@@ -9,8 +9,19 @@ import time
 from functools import lru_cache
 import threading
 import os
-from flask import redirect, url_for
 import fitz  # PyMuPDF
+import requests
+from bs4 import BeautifulSoup
+import json
+import re
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import pdfplumber
+import tempfile
+import uuid # For unique filenames
+from werkzeug.utils import secure_filename # For securing filenames
+import datetime # For default year
 
 # Logging ayarları
 logging.basicConfig(level=logging.INFO, 
@@ -22,6 +33,9 @@ app = Flask(__name__)
 # Global değişkenler
 search_engine = None
 SIMILARITY_THRESHOLD = 0.35  # Minimum bedzerlik eşiği
+
+UPLOAD_FOLDER = 'uploads' # Define your upload folder
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Add this function to process PDF files
 def pdf_to_text(pdf_path):
@@ -294,19 +308,17 @@ class SemanticSearchEngine:
         for result in graph_projects:
             if result['id'] not in seen_projects:
                 seen_projects.add(result['id'])
-                project = result['p']
+                project_node = result['p'] # Get the node directly
                 proj_dict = {
-                    "id": project["id"],
-                    "title": project["title"],
-                    "year": project["year"],
-                    "keywords": project["keywords"],
-                    "similarity": 1.0  # Graph tabanlı aramada similarity değeri yok
+                    "id": project_node.get("id"),
+                    "title": project_node.get("title"),
+                    "year": project_node.get("year"),
+                    "keywords": project_node.get("keywords"),
+                    "similarity": 1.0,
+                    "url": project_node.get("url"),  # <<< ADDED
+                    "pdf_filename": project_node.get("pdf_filename"),  # <<< ADDED
+                    "abstract": (project_node.get("abstract", "")[:150] + "...") if len(project_node.get("abstract", "")) > 150 else project_node.get("abstract", "")
                 }
-                
-                if "abstract" in project:
-                    ab = project["abstract"]
-                    proj_dict["abstract"] = (ab[:150] + "...") if len(ab) > 150 else ab
-                    
                 graph_results["projects"].append(proj_dict)
         
         # Çağrıları işle
@@ -373,11 +385,14 @@ class SemanticSearchEngine:
                 if sim > SIMILARITY_THRESHOLD:
                     proj_node = self.project_nodes[idx]
                     proj_dict = {
-                        "id": proj_node["id"],
-                        "title": proj_node["title"],
-                        "year": proj_node["year"],
-                        "keywords": proj_node["keywords"],
-                        "similarity": sim
+                        "id": proj_node.get("id"),
+                        "title": proj_node.get("title"),
+                        "year": proj_node.get("year"),
+                        "keywords": proj_node.get("keywords"),
+                        "similarity": sim,
+                        "url": proj_node.get("url"),  # <<< ADDED
+                        "pdf_filename": proj_node.get("pdf_filename"),  # <<< ADDED
+                        "abstract": (proj_node.get("abstract", "")[:150] + "...") if len(proj_node.get("abstract", "")) > 150 else proj_node.get("abstract", "")
                     }
                     
                     # abstract varsa kısaltarak ekleyelim
@@ -505,6 +520,14 @@ class SemanticSearchEngine:
 def index():
     return render_template('index.html')
 
+@app.route('/serve_pdf/<filename>')
+def serve_pdf(filename):
+    try:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    except FileNotFoundError:
+        logger.error(f"PDF file not found: {filename}")
+        return jsonify({"error": "File not found"}), 404
+    
 @app.route('/search', methods=['POST'])
 def search():
     try:
@@ -529,59 +552,57 @@ def search():
     except Exception as e:
         logger.error(f"Arama sırasında hata: {e}", exc_info=True)
         return jsonify({'error': f'Arama işlemi başarısız: {str(e)}'}), 500
-    
-
-# Add a route for the upload page
-@app.route('/upload', methods=['GET'])
-def upload_form():
-    return render_template('upload.html')
 
 # Add a route to handle the form submission
 @app.route('/submit_article', methods=['POST'])
 def submit_article():
     try:
         # Extract form data
-        title = request.form.get('title', '')
-        abstract = request.form.get('abstract', '')
-        keywords = request.form.get('keywords', '')
-        year = request.form.get('year', '')
-        academic = request.form.get('academic', '')
+        title = request.form.get('title', '').strip()
+        abstract = request.form.get('abstract', '').strip()
+        keywords = request.form.get('keywords', '').strip()
+        year_str = request.form.get('year', '')
+        academic = request.form.get('academic', '').strip()
+        article_link = request.form.get('article_link', '').strip()
+
         
         # Handle PDF file upload
         pdf_file = request.files.get('pdf_file')
-        content = ""
-        
+        content_from_pdf = ""
+        stored_pdf_filename = None
+        project_url = article_link # Prioritize provided external link
+
         if pdf_file and pdf_file.filename:
-            # Create uploads directory if it doesn't exist
-            if not os.path.exists('uploads'):
-                os.makedirs('uploads')
-                
-            # Save the PDF temporarily
-            pdf_path = os.path.join('uploads', pdf_file.filename)
+            if not os.path.exists(app.config['UPLOAD_FOLDER']):
+                os.makedirs(app.config['UPLOAD_FOLDER'])
+            
+            original_filename = secure_filename(pdf_file.filename)
+            unique_id = str(uuid.uuid4().hex) # Generate a unique ID for the filename
+            stored_pdf_filename = f"{unique_id}_{original_filename}"
+            pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_pdf_filename)
             pdf_file.save(pdf_path)
-            
-            # Extract text from the PDF
-            content = pdf_to_text(pdf_path)
-            
-            # Clean up - optionally remove the file after processing
-            # os.remove(pdf_path)
-        
-        # Generate a new article ID
-        # Here we're using timestamp as a simple solution
-        import time
+            content_from_pdf = pdf_to_text(pdf_path)
+
+            if not project_url: # If no external link, use the link to our served PDF
+                project_url = url_for('serve_pdf', filename=stored_pdf_filename, _external=False) # Relative URL
+
         article_id = int(time.time())
+        year = int(year_str) if year_str.isdigit() else datetime.datetime.now().year
         
-        # Create the project node in Neo4j
-        project = Node(
-            "Project",
-            id=article_id,
-            title=title.strip(),
-            abstract=abstract.strip(),
-            keywords=keywords.strip(),
-            year=int(year) if year.isdigit() else 0,
-            content=content  # Add the PDF content here
-        )
+        project_props = {
+            "id": article_id,
+            "title": title,
+            "abstract": abstract if abstract else content_from_pdf[:500], # Use PDF content for abstract if empty
+            "keywords": keywords,
+            "year": year,
+            "content": content_from_pdf, # Full content from PDF
+            "url": project_url if project_url else None, # Store the determined URL
+        }
+        if stored_pdf_filename:
+            project_props["pdf_filename"] = stored_pdf_filename
         
+        project = Node("Project", **project_props)
+
         # Get the graph connection
         graph = search_engine.graph
         graph.create(project)
@@ -768,6 +789,367 @@ def submit_call():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# Add this function to extract metadata from IEEE Xplore and similar URLs
+def extract_article_metadata_from_url(url):
+    """Extract metadata from academic paper URLs like IEEE Xplore"""
+    metadata = {
+        "title": "",
+        "authors": "",
+        "year": "",
+        "abstract": "",
+        "keywords": "",
+        "content": ""
+    }
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    # Try with requests first
+    try:
+        logger.info(f"Trying to fetch metadata from URL: {url}")
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, "html.parser")
+        page_source = response.text
+    except (requests.RequestException, ValueError) as e:
+        logger.warning(f"Requests access failed: {e}. Trying with Selenium...")
+        
+        # Fall back to Selenium for JavaScript-heavy sites
+        try:
+            options = webdriver.ChromeOptions()
+            options.add_argument('--headless')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+            driver.get(url)
+            time.sleep(5)  # Wait for JavaScript to load
+            
+            page_source = driver.page_source
+            soup = BeautifulSoup(page_source, "html.parser")
+            driver.quit()
+        except Exception as e:
+            logger.error(f"Selenium access also failed: {e}")
+            return metadata
+    
+    # Handle IEEE Xplore
+    if "ieeexplore.ieee.org" in url:
+        try:
+            # Look for xplGlobal.document.metadata script
+            script_tag = soup.find("script", string=re.compile("xplGlobal.document.metadata"))
+            
+            if script_tag:
+                script_content = script_tag.string
+                match = re.search(r'xplGlobal.document.metadata\s*=\s*({.*?});', script_content, re.DOTALL)
+                
+                if match:
+                    ieee_metadata = json.loads(match.group(1))
+                    
+                    # Extract data
+                    metadata["title"] = ieee_metadata.get("title", "")
+                    
+                    # Authors
+                    authors_list = ieee_metadata.get("authors", [])
+                    metadata["authors"] = ", ".join([author["name"] for author in authors_list]) if authors_list else ""
+                    
+                    # Publication year
+                    pub_date = ieee_metadata.get("publicationDate", "")
+                    if pub_date:
+                        year_match = re.search(r'\d{4}', pub_date)
+                        if year_match:
+                            metadata["year"] = year_match.group(0)
+                    
+                    # Abstract
+                    metadata["abstract"] = ieee_metadata.get("abstract", "")
+                    
+                    # Keywords
+                    keywords_list = ieee_metadata.get("keywords", [])
+                    keywords = []
+                    for keyword_group in keywords_list:
+                        keywords.extend(keyword_group.get("kwd", []))
+                    metadata["keywords"] = ", ".join(keywords)
+                    
+                    # Content extraction can remain empty as we'll use PDF for full content
+                    logger.info(f"Successfully extracted metadata from IEEE URL: {url}")
+                    return metadata
+            
+            logger.warning("IEEE metadata script not found or unable to parse")
+            
+            # Fallback to general extraction
+            metadata["title"] = soup.find("meta", property="og:title")["content"] if soup.find("meta", property="og:title") else ""
+            metadata["abstract"] = soup.find("div", class_="abstract-text") and soup.find("div", class_="abstract-text").text.strip()
+            
+            # Try to find authors
+            authors_section = soup.find("div", class_="authors-info-container")
+            if authors_section:
+                authors = authors_section.find_all("a", class_="author-name")
+                metadata["authors"] = ", ".join([author.text.strip() for author in authors])
+            
+            return metadata
+            
+        except Exception as e:
+            logger.error(f"Error parsing IEEE page: {e}", exc_info=True)
+            return metadata
+    
+    # Generic extraction for other academic sites
+    try:
+        # Try common meta tags for title
+        title_tag = soup.find("meta", property="og:title") or soup.find("meta", name="citation_title")
+        if title_tag and title_tag.get("content"):
+            metadata["title"] = title_tag["content"]
+        else:
+            title_tag = soup.find("title")
+            if title_tag:
+                metadata["title"] = title_tag.text
+        
+        # Try common meta tags for authors
+        author_tags = soup.find_all("meta", attrs={"name": "citation_author"})
+        if author_tags:
+            metadata["authors"] = ", ".join([tag["content"] for tag in author_tags])
+        
+        # Try to find publication year
+        year_tag = soup.find("meta", attrs={"name": "citation_publication_date"})
+        if year_tag and year_tag.get("content"):
+            year_match = re.search(r'\d{4}', year_tag["content"])
+            if year_match:
+                metadata["year"] = year_match.group(0)
+        
+        # Try to find abstract
+        abstract_tag = soup.find("meta", attrs={"name": "citation_abstract"})
+        if abstract_tag and abstract_tag.get("content"):
+            metadata["abstract"] = abstract_tag["content"]
+        else:
+            # Try common abstract containers
+            abstract_containers = [
+                soup.find("div", class_="abstract"),
+                soup.find("section", class_="abstract"),
+                soup.find("p", class_="abstract"),
+                soup.find("div", id="abstract")
+            ]
+            
+            for container in abstract_containers:
+                if container:
+                    metadata["abstract"] = container.text.strip()
+                    break
+        
+        # Try to find keywords
+        keywords_containers = [
+            soup.find("div", class_="keywords"),
+            soup.find("div", class_="kwd-group"),
+            soup.find("ul", class_="keywords")
+        ]
+        
+        for container in keywords_containers:
+            if container:
+                keywords = container.find_all(["li", "a", "span"])
+                if keywords:
+                    metadata["keywords"] = ", ".join([k.text.strip() for k in keywords])
+                    break
+                else:
+                    metadata["keywords"] = container.text.strip()
+                break
+        
+        logger.info(f"Extracted metadata from URL: {url}")
+        return metadata
+        
+    except Exception as e:
+        logger.error(f"Error extracting metadata from URL: {e}", exc_info=True)
+        return metadata
+
+def extract_content_from_pdf(pdf_file):
+    """Extract textual content from an uploaded PDF file, including full content and
+    the section between introduction and references/conclusion"""
+    content = ""
+    
+    try:
+        # Create a temporary file to save the uploaded PDF
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            pdf_file.save(temp_file.name)
+            temp_path = temp_file.name
+        
+        # Extract text using PyMuPDF (faster approach)
+        try:
+            doc = fitz.open(temp_path)
+            for page in doc:
+                content += page.get_text() + "\n"
+            doc.close()
+        except Exception as e:
+            logger.warning(f"PyMuPDF extraction failed: {e}. Trying pdfplumber...")
+            
+            # Fallback to pdfplumber for more robust extraction
+            with pdfplumber.open(temp_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        content += page_text + "\n"
+        
+        # Extract main content (between introduction and references/conclusion)
+        main_content_pattern = re.compile(
+            r"(?i)(\b1\.?\s*introduction\b.*?)(\b(?:references|bibliography|conclusion)\b)", 
+            re.DOTALL
+        )
+        main_content_match = main_content_pattern.search(content)
+        
+        main_content = ""
+        if main_content_match:
+            main_content = main_content_match.group(1).strip()
+        
+        # Try to extract introduction section if available
+        intro_pattern = re.compile(
+            r"(?i)(\b1\.?\s*introduction\b.*?)(\b\d+\.?\s*\w+)", 
+            re.DOTALL
+        )
+        intro_match = intro_pattern.search(content)
+        
+        intro_content = ""
+        if intro_match:
+            intro_content = intro_match.group(1).strip()
+        
+        # Delete temporary file
+        os.unlink(temp_path)
+        
+        return {
+            'full_content': content, 
+            'intro': intro_content,
+            'main_content': main_content  # Add the main content between intro and references
+        }
+        
+    except Exception as e:
+        logger.error(f"Error extracting content from PDF: {e}", exc_info=True)
+        return {'full_content': '', 'intro': '', 'main_content': ''}
+
+# Add new route to handle URL-based article submission
+@app.route('/submit_article_url', methods=['POST'])
+def submit_article_url():
+    try:
+        # Get the article URL
+        article_url = request.form.get('article_url', '')
+        
+        if not article_url:
+            return jsonify({"success": False, "error": "Article URL is required"}), 400
+        
+        # Extract metadata from the URL
+        metadata = extract_article_metadata_from_url(article_url)
+        
+        # Check if we have a PDF file
+        pdf_file = request.files.get('pdf_file')
+        content_from_pdf = ""
+        stored_pdf_filename = None
+        
+        if pdf_file and pdf_file.filename:
+            if not os.path.exists(app.config['UPLOAD_FOLDER']):
+                os.makedirs(app.config['UPLOAD_FOLDER'])
+
+            original_filename = secure_filename(pdf_file.filename)
+            unique_id = str(uuid.uuid4().hex)
+            stored_pdf_filename = f"{unique_id}_{original_filename}"
+            pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_pdf_filename)
+            pdf_file.save(pdf_path)
+            
+            extraction_result = extract_content_from_pdf(pdf_file) # Use your existing function
+            content_from_pdf = extraction_result.get('full_content', '')
+            
+            if not metadata.get('abstract') and extraction_result.get('intro'):
+                metadata['abstract'] = extraction_result['intro'][:500]
+        
+        # Generate a new article ID
+        article_id = int(time.time())
+        year_val = int(metadata['year']) if metadata.get('year', '').isdigit() else datetime.datetime.now().year
+
+        # Create the project node in Neo4j
+        project_props = {
+            "id": article_id,
+            "title": metadata.get('title', 'N/A').strip(),
+            "abstract": metadata.get('abstract', '').strip(),
+            "keywords": metadata.get('keywords', '').strip(),
+            "year": year_val,
+            "content": content_from_pdf, # Full content from PDF if provided
+            "url": article_url # The external URL is the primary link
+        }
+        if stored_pdf_filename:
+            project_props["pdf_filename"] = stored_pdf_filename
+            if not content_from_pdf and not metadata.get('abstract'): # if no abstract from meta and no content from pdf yet
+                 project_props["abstract"] = pdf_to_text(os.path.join(app.config['UPLOAD_FOLDER'], stored_pdf_filename))[:500]
+
+        project = Node("Project", **project_props)
+        # Get the graph connection
+        graph = search_engine.graph
+        graph.create(project)
+        
+        # Process academics (authors)
+        academic_names = [name.strip() for name in metadata['authors'].split(',') if name.strip()]
+        
+        for name in academic_names:
+            # Check if academic exists
+            academic_node = search_engine.matcher.match("Academic", name=name).first()
+            
+            if not academic_node:
+                # Create keyword summary for the academic
+                keyword_samples = []
+                if metadata['keywords'] and metadata['keywords'].strip():
+                    keyword_samples = [kw.strip() for kw in metadata['keywords'].split(',')[:3] if kw.strip()]
+                
+                keyword_str = f"Expert in {', '.join(keyword_samples)}" if keyword_samples else "Researcher"
+                
+                academic_node = Node(
+                    "Academic",
+                    name=name,
+                    keywords=keyword_str
+                )
+                graph.create(academic_node)
+                search_engine.academics[name] = academic_node
+            
+            # Create relationship between academic and project
+            owns_rel = Relationship(academic_node, "OWNS", project)
+            graph.create(owns_rel)
+            
+            # Process keywords
+            keywords_list = [kw.strip() for kw in metadata['keywords'].split(',') if kw.strip()]
+            for keyword in keywords_list:
+                keyword_node = Node("Keyword", name=keyword.lower())
+                try:
+                    graph.merge(keyword_node, "Keyword", "name")
+                    
+                    # Project-Keyword relationship
+                    has_keyword_rel = Relationship(project, "HAS_KEYWORD", keyword_node)
+                    graph.create(has_keyword_rel)
+                    
+                    # Academic-Keyword relationship
+                    expert_in_rel = Relationship(academic_node, "EXPERT_IN", keyword_node)
+                    graph.create(expert_in_rel)
+                except Exception as e:
+                    logger.warning(f"Keyword relationship error: {e}")
+                    continue
+        
+        # Add the new project to the search engine's project list
+        search_engine.projects.append(project)
+        
+        # Update embeddings if the model is already loaded
+        if search_engine.model_loaded:
+            search_engine.precompute_embeddings()
+        
+        return jsonify({
+            "success": True, 
+            "message": "Article added successfully from URL", 
+            "article_id": article_id,
+            "metadata": metadata  # Return the extracted metadata for confirmation
+        })
+        
+    except Exception as e:
+        logger.error(f"Error while submitting article from URL: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/upload', methods=['GET'])
+def upload_form():
+    # Create the uploads folder if it doesn't exist when the upload page is accessed
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        try:
+            os.makedirs(app.config['UPLOAD_FOLDER'])
+            logger.info(f"Created upload folder: {app.config['UPLOAD_FOLDER']}")
+        except OSError as e:
+            logger.error(f"Could not create upload folder: {app.config['UPLOAD_FOLDER']}. Error: {e}")
+    return render_template('upload.html')
 
 
 if __name__ == '__main__':

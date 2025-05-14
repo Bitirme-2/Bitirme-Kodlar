@@ -261,14 +261,50 @@ async function searchKeyword(keyword) {
     return await response.json();
   }
 
-    // Sonuç kartı oluşturma fonksiyonları
     function createProjectCard(project) {
+      let titleDisplay = project.title || 'Başlık Yok';
+      let isExternalLink = project.url && (project.url.startsWith('http://') || project.url.startsWith('https://'));
+      // If project.url exists, make the title a clickable link
+      if (isExternalLink) {
+        titleDisplay = `<a href="${project.url}" target="_blank" style="color: #66bfff; text-decoration: none; font-weight: bold;">${project.title || 'Başlık Yok'}</a>`;
+      }
+
+      let abstractShort = project.abstract || '';
+      // The backend already shortens the abstract, but if not, you can do it here:
+      // if (abstractShort.length > 150) {
+      //    abstractShort = abstractShort.substring(0, 150) + "...";
+      // }
+      
+      let keywordsDisplay = project.keywords || 'N/A';
+      let yearDisplay = project.year || 'N/A';
+
+      // Optional: Add a direct PDF download/view link if pdf_filename is available 
+      // AND it's different from the main project.url (or if you always want to show it)
+      let pdfDirectLinkHTML = '';
+      // Eğer project.pdf_filename backend'den geliyorsa ve doluysa, her zaman PDF linkini göster.
+      if (project.pdf_filename && project.pdf_filename.trim() !== "") {
+          const pdfServeUrl = `/serve_pdf/${project.pdf_filename}`;
+          pdfDirectLinkHTML = `<div class="card-detail" style="margin-top: 5px;"><a href="${pdfServeUrl}" target="_blank" style="color: #ADD8E6; font-size: 0.9em;">PDF Görüntüle/İndir (Lokal)</a></div>`;
+      } else {
+          // Eğer pdf_filename yoksa, "PDF Display Link if applicable" yorumunu veya boş bir string gösterebilirsiniz.
+          // Görseldeki gibi bir yorum satırı için:
+          // pdfDirectLinkHTML = `<div class="card-detail" style="font-style: italic; color: #777; font-size:0.8em;">/* PDF linki mevcut değil */</div>`;
+          // Veya tamamen boş bırakmak için:
+          pdfDirectLinkHTML = ''; // Ya da görseldeki gibi bir yorum satırı: '/* Display direct PDF link if applicable */'
+                                  // Ama eğer görselde bu yorum sizin tarafınızdan eklendiyse ve dinamik değilse,
+                                  // o zaman pdf_filename gelmediğinde bu kısım boş kalmalı.
+                                  // Şimdilik boş bırakalım eğer pdf_filename yoksa.
+      }
+
+
       return `
         <div class="result-card">
-          <div class="card-title">${project.title}</div>
-          <div class="card-detail"><strong>Yıl:</strong> ${project.year}</div>
-          <div class="card-detail"><strong>Anahtar Kelimeler:</strong> ${project.keywords}</div>
-          <div class="similarity-badge">Benzerlik: ${Math.round(project.similarity * 100)}%</div>
+          <div class="card-title">${titleDisplay}</div>
+          <div class="card-detail"><strong>Yıl:</strong> ${yearDisplay}</div>
+          <div class="card-detail"><strong>Anahtar Kelimeler:</strong> ${keywordsDisplay}</div>
+          <div class="card-detail"><strong>Özet:</strong> ${abstractShort || 'N/A'}</div>
+          ${pdfDirectLinkHTML} 
+          <div class="similarity-badge" style="margin-top: auto;">Benzerlik: ${Math.round((project.similarity || 0) * 100)}%</div>
         </div>
       `;
     }
