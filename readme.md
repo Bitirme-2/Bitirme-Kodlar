@@ -90,6 +90,6 @@ Sistem, arama işlemleri için değiştirilebilir üç farklı model kullanır:
 
 ## 🧑‍💻 Katkıda Bulunanlar
 
-* [cite_start]Yasir Şekerci [cite: 2501]
-* [cite_start]Abdullah Enes Patır [cite: 2501]
-* [cite_start]Feridun Taha Açıkyürek [cite: 2501]
+* Yasir Şekerci 
+* Abdullah Enes Patır 
+* Feridun Taha Açıkyürek 
