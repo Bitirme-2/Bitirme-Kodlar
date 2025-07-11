@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Akademik Arama Motoru</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 30px;
+      font-weight: 600;
+    }
+
+    .model-selector {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background-color: #fff;
+      padding: 10px 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .model-selector label {
+      font-size: 14px;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    .model-selector select {
+      padding: 6px 12px;
+      font-size: 14px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background-color: #fff;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .search-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 40px;
+    }
+
+    input[type="text"] {
+      padding: 12px 18px;
+      font-size: 16px;
+      width: 280px;
+      border: 2px solid #000;
+      border-radius: 30px;
+      background: #fff;
+      color: #000;
+      outline: none;
+    }
+
+    .submit-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background-color: #000;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease;
+    }
+
+    .submit-btn:hover {
+      transform: scale(1.05);
+    }
+
+    .submit-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: #fff;
+    }
+
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 20px;
+    }
+
+    .nav-btn {
+      padding: 10px 20px;
+      background-color: #333;
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .results-grid {
+      display: flex;
+      gap: 30px;
+      justify-content: center;
+      width: 100%;
+      max-width: 1200px;
+    }
+
+    .result-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      flex: 1;
+      max-width: 360px;
+    }
+
+    .column-title {
+      text-align: center;
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .result-card {
+      padding: 20px;
+      background-color: #000;
+      color: #fff;
+      border-radius: 12px;
+      font-size: 14px;
+      transition: transform 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .result-card:hover {
+      transform: translateY(-5px);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+
+    .card-detail {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+
+    .similarity-badge {
+      align-self: flex-end;
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    .no-results {
+      text-align: center;
+      color: #666;
+      font-style: italic;
+      padding: 20px;
+    }
+
+    .loading {
+      display: none;
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-left-color: #000;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .result-count {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 16px;
+      color: #666;
+    }
+
+    .model-loading {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .model-loading-content {
+      background-color: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+
+    .model-loading .spinner {
+      margin-bottom: 15px;
+    }
+
+    .model-loading p {
+      margin: 5px 0;
+      font-size: 16px;
+    }
+
+    .model-loading .progress {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .clear-btn {
+      padding: 6px 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background-color: #f8f8f8;
+      cursor: pointer;
+      margin-left: 8px;
+      line-height: 1;
+      font-weight: bold;
+    }
+
+    .clear-btn:hover {
+      background-color: #e9e9e9;
+      border-color: #bbb;
+    }
+
+    @media (max-width: 900px) {
+      .results-grid {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .result-column {
+        width: 100%;
+      }
+
+      .model-selector {
+        position: static;
+        margin-bottom: 20px;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Model seçici -->
+  <div class="model-selector">
+    <label for="modelSelect">Model:</label>
+    <select id="modelSelect">
+  <option value="sentence_transformer">Sentence Transformer (mpnet)</option>
+  <option value="sentence_transformer_minilm">Sentence Transformer (MiniLM-L12-v2)</option> // Bu satırı ekleyin
+  <option value="pykeen">PyKEEN Graph Model</option>
+</select>
+    <button id="clearResultsBtn" class="clear-btn" title="Sonuçları Temizle">
+      ✖
+    </button>
+  </div>
+
+  <!-- Model yükleme göstergesi -->
+  <div class="model-loading" id="modelLoading">
+    <div class="model-loading-content">
+      <div class="spinner"></div>
+      <p><strong>Model değiştiriliyor...</strong></p>
+      <p class="progress">Yeni model yükleniyor ve hesaplamalar yapılıyor</p>
+      <p class="progress">Bu işlem birkaç dakika sürebilir</p>
+    </div>
+  </div>
+
+  <!-- Navigasyon butonları -->
+  <div class="nav-buttons">
+    <div></div>
+    <div>
+      <a href="/add_call" class="nav-btn" style="margin-right: 10px;">Çağrı Ekle</a>
+      <a href="/upload" class="nav-btn" style="margin-right: 10px;">Makale Yükle</a>
+      <a href="/health" class="nav-btn">Sistem Sağlığı</a>
+      <a href="/list" class="nav-btn" style="margin-right: 10px;">Veri Yönetimi</a>
+    </div>
+  </div>
+  
+  <h1>Akademik Arama Motoru</h1>
+
+  <div class="search-container">
+    <input type="text" id="keyword" placeholder="Anahtar kelime, makale başlığı veya yazar adı...">
+    <button class="submit-btn" id="searchButton">
+      <svg viewBox="0 0 24 24">
+        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Arama yapılıyor...</p>
+  </div>
+
+  <div class="result-count" id="resultCount"></div>
+
+  <div class="results-grid">
+    <div class="result-column">
+      <div class="column-title">Projeler</div>
+      <div id="projectsContainer"></div>
+    </div>
+    
+    <div class="result-column">
+      <div class="column-title">Çağrılar</div>
+      <div id="callsContainer"></div>
+    </div>
+    
+    <div class="result-column">
+      <div class="column-title">Akademisyenler</div>
+      <div id="academicsContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    // Model değiştirme
+document.getElementById('modelSelect').addEventListener('change', async function() {
+  const selectedModel = this.value;
+  const modelLoadingDiv = document.getElementById('modelLoading');
+  
+  modelLoadingDiv.style.display = 'flex';
+  
+  try {
+    const response = await fetch('/change_model', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ model_type: selectedModel })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Model değiştirme başarısız oldu');
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      // Model yükleme durumunu kontrol et
+      await waitForModelLoad(selectedModel);
+      alert('Model başarıyla değiştirildi!');
+    } else {
+      throw new Error(result.error || 'Model değiştirme hatası');
+    }
+  } catch (error) {
+    console.error('Model değiştirme hatası:', error);
+    alert('Model değiştirirken bir hata oluştu: ' + error.message);
+  } finally {
+    modelLoadingDiv.style.display = 'none';
+  }
+});
+
+// Model yükleme durumunu kontrol eden fonksiyon
+async function waitForModelLoad(targetModel) {
+  const maxAttempts = 60; // 60 saniye maksimum bekleme
+  let attempts = 0;
+  
+  while (attempts < maxAttempts) {
+    try {
+      const response = await fetch('/model_status');
+      const status = await response.json();
+      
+      if (status.loaded && status.current_model === targetModel) {
+        return; // Model yüklendi
+      }
+      
+      // 1 saniye bekle
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+      
+    } catch (error) {
+      console.error('Model status check error:', error);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      attempts++;
+    }
+  }
+  
+  throw new Error('Model yükleme zaman aşımına uğradı');
+}
+
+    // Sonuçları temizle
+    document.getElementById('clearResultsBtn').addEventListener('click', () => {
+      clearResults();
+    });
+
+    async function searchKeyword(keyword) {
+      const response = await fetch('/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: keyword })
+      });
+      if (!response.ok) {
+        throw new Error('Sunucudan veri alınamadı: ' + response.statusText);
+      }
+      return await response.json();
+    }
+
+    function createProjectCard(project) {
+      let titleDisplay = project.title || 'Başlık Yok';
+      let isExternalLink = project.url && (project.url.startsWith('http://') || project.url.startsWith('https://'));
+      
+      if (isExternalLink) {
+        titleDisplay = `<a href="${project.url}" target="_blank" style="color: #66bfff; text-decoration: none; font-weight: bold;">${project.title || 'Başlık Yok'}</a>`;
+      }
+
+      let abstractShort = project.abstract || '';
+      let keywordsDisplay = project.keywords || 'N/A';
+      let yearDisplay = project.year || 'N/A';
+
+      let pdfDirectLinkHTML = '';
+      if (project.pdf_filename && project.pdf_filename.trim() !== "") {
+          const pdfServeUrl = `/serve_pdf/${project.pdf_filename}`;
+          pdfDirectLinkHTML = `<div class="card-detail" style="margin-top: 5px;"><a href="${pdfServeUrl}" target="_blank" style="color: #ADD8E6; font-size: 0.9em;">PDF Görüntüle/İndir</a></div>`;
+      }
+
+      return `
+        <div class="result-card">
+          <div class="card-title">${titleDisplay}</div>
+          <div class="card-detail"><strong>Yıl:</strong> ${yearDisplay}</div>
+          <div class="card-detail"><strong>Anahtar Kelimeler:</strong> ${keywordsDisplay}</div>
+          <div class="card-detail"><strong>Özet:</strong> ${abstractShort || 'N/A'}</div>
+          ${pdfDirectLinkHTML} 
+          <div class="similarity-badge" style="margin-top: auto;">Benzerlik: ${Math.round((project.similarity || 0) * 100)}%</div>
+        </div>
+      `;
+    }
+
+    function createCallCard(call) {
+      return `
+        <div class="result-card">
+          <div class="card-title">${call.title}</div>
+          <div class="card-detail">${call.description}</div>
+          <div class="similarity-badge">Benzerlik: ${Math.round(call.similarity * 100)}%</div>
+        </div>
+      `;
+    }
+
+    function createAcademicCard(academic) {
+      return `
+        <div class="result-card">
+          <div class="card-title">${academic.name}</div>
+          <div class="card-detail">${academic.keywords}</div>
+          <div class="similarity-badge">Benzerlik: ${Math.round(academic.similarity * 100)}%</div>
+        </div>
+      `;
+    }
+
+    function clearResults() {
+      document.getElementById('projectsContainer').innerHTML = '';
+      document.getElementById('callsContainer').innerHTML = '';
+      document.getElementById('academicsContainer').innerHTML = '';
+      document.getElementById('resultCount').textContent = '';
+    }
+
+    function displayResults(results) {
+      clearResults();
+      
+      const projectsContainer = document.getElementById('projectsContainer');
+      const callsContainer = document.getElementById('callsContainer');
+      const academicsContainer = document.getElementById('academicsContainer');
+      
+      // Projeleri ekle
+      if (results.projects && results.projects.length > 0) {
+        results.projects.forEach(project => {
+          projectsContainer.innerHTML += createProjectCard(project);
+        });
+      } else {
+        projectsContainer.innerHTML = '<div class="no-results">Eşleşen proje bulunamadı</div>';
+      }
+      
+      // Çağrıları ekle
+      if (results.calls && results.calls.length > 0) {
+        results.calls.forEach(call => {
+          callsContainer.innerHTML += createCallCard(call);
+        });
+      } else {
+        callsContainer.innerHTML = '<div class="no-results">Eşleşen çağrı bulunamadı</div>';
+      }
+      
+      // Akademisyenleri ekle
+      if (results.academics && results.academics.length > 0) {
+        results.academics.forEach(academic => {
+          academicsContainer.innerHTML += createAcademicCard(academic);
+        });
+      } else {
+        academicsContainer.innerHTML = '<div class="no-results">Eşleşen akademisyen bulunamadı</div>';
+      }
+      
+      // Toplam sonuç sayısını göster
+      const totalCount = 
+        (results.projects ? results.projects.length : 0) + 
+        (results.calls ? results.calls.length : 0) + 
+        (results.academics ? results.academics.length : 0);
+      
+      document.getElementById('resultCount').textContent = `Toplam ${totalCount} sonuç bulundu`;
+    }
+
+    async function performSearch() {
+      const keyword = document.getElementById('keyword').value.trim();
+      
+      if (!keyword) {
+        alert('Lütfen bir anahtar kelime girin');
+        return;
+      }
+      
+      document.getElementById('loading').style.display = 'block';
+      clearResults();
+      
+      try {
+        const results = await searchKeyword(keyword);
+        document.getElementById('loading').style.display = 'none';
+        
+        if (results.error) {
+            alert(`Arama hatası: ${results.error}`);
+            return;
+        }
+        
+        displayResults(results);
+      } catch (error) {
+        console.error('Arama sırasında hata oluştu:', error);
+        document.getElementById('loading').style.display = 'none';
+        alert(`Arama yapılırken bir hata oluştu: ${error.message}`);
+      }
+    }
+
+    // Event listeners
+    document.getElementById('searchButton').addEventListener('click', performSearch);
+    document.getElementById('keyword').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        performSearch();
+      }
+    });
+  </script>
+</body>
+</html>

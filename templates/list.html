@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Veri Yönetimi</title>
+  <style>
+    /* index.html'den kopyalanan stiller */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f5f5f5;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 30px;
+      font-weight: 600;
+    }
+    
+    h2 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 10px;
+      width: 100%;
+      max-width: 800px;
+      text-align: center;
+    }
+
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 1200px;
+      margin-bottom: 20px;
+      position: absolute;
+      top: 20px;
+    }
+
+    .nav-btn {
+      padding: 10px 20px;
+      background-color: #333;
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+    }
+
+    .data-list-container {
+      width: 100%;
+      max-width: 800px;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .data-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .data-item:last-child {
+      border-bottom: none;
+    }
+
+    .data-item-title {
+      font-weight: 500;
+    }
+
+    .delete-btn {
+      padding: 5px 12px;
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s ease;
+    }
+
+    .delete-btn:hover {
+      background-color: #c0392b;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 20px;
+      font-size: 16px;
+      color: #666;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="nav-buttons">
+    <div>
+      <a href="/" class="nav-btn" style="margin-left: 20px;">Ana Sayfa</a>
+    </div>
+    <div>
+      <a href="/add_call" class="nav-btn" style="margin-right: 10px;">Çağrı Ekle</a>
+      <a href="/upload" class="nav-btn" style="margin-right: 10px;">Makale Yükle</a>
+      <a href="/health" class="nav-btn" style="margin-right: 20px;">Sistem Sağlığı</a>
+    </div>
+  </div>
+  
+  <h1>Veri Yönetimi</h1>
+
+  <div id="loading" class="loading">
+    <p>Veriler yükleniyor...</p>
+  </div>
+
+  <div class="data-list-container" id="dataContainer" style="display: none;">
+    <h2>Projeler</h2>
+    <div id="projectsList">
+        </div>
+
+    <h2>Çağrılar</h2>
+    <div id="callsList">
+        </div>
+
+        <h2>Akademisyenler</h2>
+    <div id="academicsList">
+        </div>
+  </div>
+
+  </div>
+
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchData();
+    });
+
+    async function fetchData() {
+      const loadingDiv = document.getElementById('loading');
+      const dataContainer = document.getElementById('dataContainer');
+
+      try {
+        const response = await fetch('/api/list-all');
+        if (!response.ok) {
+          throw new Error('Veri alınamadı.');
+        }
+        const data = await response.json();
+        
+        renderData(data);
+        
+        loadingDiv.style.display = 'none';
+        dataContainer.style.display = 'block';
+
+      } catch (error) {
+        console.error('Hata:', error);
+        loadingDiv.textContent = 'Veriler yüklenirken bir hata oluştu.';
+      }
+    }
+
+    function renderData(data) {
+      const projectsList = document.getElementById('projectsList');
+      const callsList = document.getElementById('callsList');
+      const academicsList = document.getElementById('academicsList'); // Yeni liste
+
+      projectsList.innerHTML = '';
+      callsList.innerHTML = '';
+      academicsList.innerHTML = ''; // Listeyi temizle
+      
+      // Projeleri render et
+      if (data.projects && data.projects.length > 0) {
+        data.projects.forEach(project => {
+          const item = document.createElement('div');
+          item.className = 'data-item';
+          item.dataset.id = project.id;
+          item.innerHTML = `
+            <span class="data-item-title">${project.title || 'Başlıksız Proje'} (ID: ${project.id})</span>
+            <button class="delete-btn" onclick="deleteItem('project', ${project.id})">Sil</button>
+          `;
+          projectsList.appendChild(item);
+        });
+      } else {
+        projectsList.innerHTML = '<p class="no-data">Gösterilecek proje bulunamadı.</p>';
+      }
+
+      // Çağrıları render et
+      if (data.calls && data.calls.length > 0) {
+        data.calls.forEach(call => {
+          const item = document.createElement('div');
+          item.className = 'data-item';
+          item.dataset.id = call.id;
+          item.innerHTML = `
+            <span class="data-item-title">${call.title || 'Başlıksız Çağrı'} (ID: ${call.id})</span>
+            <button class="delete-btn" onclick="deleteItem('call', ${call.id})">Sil</button>
+          `;
+          callsList.appendChild(item);
+        });
+      } else {
+        callsList.innerHTML = '<p class="no-data">Gösterilecek çağrı bulunamadı.</p>';
+      }
+
+      // Akademisyenleri render et (YENİ BÖLÜM)
+      if (data.academics && data.academics.length > 0) {
+        data.academics.forEach(academic => {
+          const item = document.createElement('div');
+          item.className = 'data-item';
+          // Akademisyenler için ID olarak isimlerini kullanıyoruz ve tırnak işaretlerinden kaçınıyoruz
+          const academicName = academic.name.replace(/'/g, "\\'");
+          item.dataset.id = academicName;
+          item.innerHTML = `
+            <span class="data-item-title">${academic.name}</span>
+            <button class="delete-btn" onclick="deleteItem('academic', '${academicName}')">Sil</button>
+          `;
+          academicsList.appendChild(item);
+        });
+      } else {
+        academicsList.innerHTML = '<p class="no-data">Gösterilecek akademisyen bulunamadı.</p>';
+      }
+    }
+
+    async function deleteItem(type, id) {
+      // Onay mesajını türe göre özelleştir
+      let confirmMessage = `Bu ${type} adlı öğeyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`;
+      if (type === 'academic') {
+        confirmMessage = `Bu akademisyeni silmek istediğinizden emin misiniz? Bu işlem, akademisyene ait TÜM projeleri ve çağrıları da kalıcı olarak silecektir!`;
+      } else if (type === 'project') {
+          confirmMessage = `Bu projeyi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`;
+      } else if (type === 'call') {
+          confirmMessage = `Bu çağrıyı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`;
+      }
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/delete-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: type, id: id })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          // Öğeyi arayüzden kaldır
+          const itemElement = document.querySelector(`.data-item[data-id='${id}']`);
+          if (itemElement) {
+            itemElement.remove();
+          }
+          alert('Öğe başarıyla silindi.');
+        } else {
+          throw new Error(result.error || 'Silme işlemi başarısız oldu.');
+        }
+      } catch (error) {
+        console.error('Silme hatası:', error);
+        alert('Öğeyi silerken bir hata oluştu: ' + error.message);
+      }
+    }
+  </script>
+</body>
+</html>
