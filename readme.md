@@ -67,7 +67,6 @@ Projenin yerel makinede çalıştırılması için aşağıdaki adımları izley
 
 ## 🗂️ Proje Yapısı
 
-
 .
 ├── app.py                  # Ana Flask uygulaması, tüm backend mantığı
 ├── train_pykeen.py         # PyKEEN modelini eğitmek için script
@@ -81,6 +80,7 @@ Projenin yerel makinede çalıştırılması için aşağıdaki adımları izley
 │   └── list.html
 ├── uploads/                # Yüklenen PDF'lerin saklandığı klasör
 └── pykeen_model/           # Eğitilmiş PyKEEN modelinin saklandığı klasör
+
 
 
 ## 🧠 Modeller
